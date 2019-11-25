@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900|Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@2.0.17/dist/vuetify.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@3.x/css/materialdesignicons.min.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+</head>
+<body>
+<div id="app">
+    <v-app id="inspire">
+        <v-card
+                color="red lighten-2"
+                dark
+        >
+            <v-card-title class="headline red lighten-3">
+                Search French addresses
+            </v-card-title>
+            <v-card-text>
+                <a href="https://www.data.gouv.fr/fr/datasets/base-d-adresses-nationale-ouverte-bano/">Base d'Adresses Nationale Ouverte - BANO </a>
+            </v-card-text>
+            <v-card-text>
+                <button v-on:click="geolocation">Find me</button>
+            </v-card-text>
+            <v-card-text>
+                <v-autocomplete
+                        v-model="model"
+                        :items="items"
+                        :loading="isLoading"
+                        :search-input.sync="search"
+                        color="blue"
+                        hide-no-data
+                        no-filter
+                        item-text="Description"
+                        item-value="id"
+                        label="French addresses"
+                        placeholder="Start typing to Search"
+                        prepend-icon="mdi-database-search"
+                        return-object
+                ></v-autocomplete>
+            </v-card-text>
+            <v-divider></v-divider>
+            <v-expand-transition>
+                <v-list v-if="model" class="red lighten-3">
+                    <v-list-item
+                            v-for="(field, i) in fields"
+                            :key="i"
+                    >
+                        <v-list-item-content>
+                            <v-list-item-title v-text="field.value"></v-list-item-title>
+                            <v-list-item-subtitle v-text="field.key"></v-list-item-subtitle>
+                        </v-list-item-content>
+                    </v-list-item>
+                </v-list>
+            </v-expand-transition>
+            <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn
+                        :disabled="!model"
+                        color="grey darken-3"
+                        @click="model = null"
+                >
+                    Clear
+                    <v-icon right>mdi-close-circle</v-icon>
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-app>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vuetify@2.0.17/dist/vuetify.min.js"></script>
+
+<script>
+    new Vue({
+  el: '#app',
+  vuetify: new Vuetify(),
+  data: () => ({
+    descriptionLimit: 60,
+    entries: [],
+    isLoading: false,
+    model: null,
+    search: null,
+    localisation: null
+  }),
+
+  computed: {
+    fields () {
+      if (!this.model) return []
+
+      return Object.keys(this.model).map(key => {
+        return {
+          key,
+          value: this.model[key] || 'n/a'
+        }
+      })
+    },
+    items () {
+      return this.entries.map(entry => {
+        const Description =  entry.num +' '+ entry.type +' '+ entry.zipcode +' ' + entry.city +' '
+       // console.log(Description)
+        return Object.assign({}, entry, { Description })
+      })
+    }
+  },
+   methods: {
+
+   geolocation() {
+      navigator.geolocation.getCurrentPosition(this.buildUrl, this.geoError);
+    },
+    buildUrl(position) {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+
+      this.localisation= lat + ',' + lon ;
+      var url = new URL("http://localhost:8080/api/findAddress"),
+      params = {localisation: this.localisation}
+      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]))
+      fetch(url)
+        .then(res => res.json())
+        .then(res => {
+         this.search = res.num +' ' + res.type +' ' + res.zipcode +' ' + res.city;
+         res.Description=this.search;
+         this.entries = [res];
+         this.model=res;
+        })
+        .catch(err => {
+          console.log(err)
+        })
+    },
+    geoError(error) {
+      alert("error geolocalization not available")
+    }
+
+   },
+
+  watch: {
+    search (val) {
+     if(!val){
+       return;
+       }
+      // Items have already been loaded
+      //if (this.items.length > 0) return
+
+      // Items have already been requested
+      if (this.isLoading) return
+
+      this.isLoading = true
+
+      // Lazily load input items
+      var url = new URL("http://localhost:8080/api/search"),
+      params = {address: val}
+      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]))
+      fetch(url)
+        .then(res => res.json())
+        .then(res => {
+         // const { entries } = res
+         // this.count = count
+          this.entries = res
+          console.log(val +' '+res.length)
+        })
+        .catch(err => {
+          console.log(err)
+        })
+        .finally(() => (this.isLoading = false))
+    }
+  }
+});
+  </script>
+</body>
+</html>
